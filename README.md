@@ -16,5 +16,8 @@ Create `.env` based on `.env.example` or put your config variables into the env.
 ### Parse
 
 ```bash
-python -m main --match_id=461102
+python -m main --match_ids=461102
+
+### Export multiple matches at once
+python -m main --match_ids=461102,461103,461104
 ```

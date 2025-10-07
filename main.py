@@ -1,4 +1,4 @@
-"""CLI entrypoint to export Smart Tables statistics for a single match."""
+"""CLI entrypoint to export Smart Tables statistics for one or more matches."""
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -43,17 +43,20 @@ def export_match_stats(
             with destination.open("w", encoding="utf-8") as fp:
                 json.dump(payload, fp, ensure_ascii=False, indent=4)
         except Exception as e:
-            print("No stat %s for the match %s" % stat % match_id)
+            print("No stat %s for the match %s" % (stat, match_id))
             print(e)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download Smart Tables stats for a single match.",
+        description="Download Smart Tables stats for one or more matches.",
     )
     parser.add_argument(
-        "--match_id",
+        "--match_ids",
         required=True,
-        help="Identifier of the match to export (required).",
+        help=(
+            "Comma-separated list of match identifiers to export (no whitespace is "
+            "required, but tolerated)."
+        ),
     )
     return parser.parse_args()
 
@@ -61,7 +64,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     client = build_client()
-    export_match_stats(client, args.match_id)
+    match_ids = [match_id.strip() for match_id in args.match_ids.split(",") if match_id.strip()]
+    for match_id in match_ids:
+        export_match_stats(client, match_id)
+        print(f"id {match_id} stat OK")
 
 
 if __name__ == "__main__":
