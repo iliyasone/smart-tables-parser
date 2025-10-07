@@ -9,6 +9,10 @@ source venv/bin/activate
 pip install -r pip-requirements.txt
 ```
 
+### Secrets
+
+Create `.env` based on `.env.example` or put your config variables into the env.
+
 ### Parse
 
 ```bash
