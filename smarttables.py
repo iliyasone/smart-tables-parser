@@ -12,7 +12,10 @@ from config import DEVICE_FINGERPRINT, EMAIL, PASSWORD, SMART_TABLES_TOKEN
 
 BASE_URL = "https://backend.smart-tables.ru"
 LOGIN_PATH = "/api/v1/auth/login"
-STAT_ODDS_PATH = "/api/v1/match-center/{match_id}/stat-odds"
+STAT_ODDS_PATHS: tuple[str, str] = (
+    "/api/v1/match-center/{match_id}/stat-odds",
+    "/api/v1/matches/{match_id}/stat-odds",
+)
 
 DEFAULT_HEADERS: dict[str, str] = {
     # Harmless headers; some Laravel backends peek at these.
@@ -94,19 +97,33 @@ class SmartTablesClient:
         stat_format: str = "totals",
         stat_period: str = "all",
     ) -> dict:
-        """
-        GET /api/v1/match-center/{match_id}/stat-odds?stat=...&stat_format=...&stat_period=...
-        Returns the JSON dict.
-        """
-        url = f"{BASE_URL}{STAT_ODDS_PATH.format(match_id=match_id)}"
+        """Fetch stat odds, trying both known endpoint variants before giving up."""
+
         params = {
             "stat": stat,
             "stat_format": stat_format,
             "stat_period": stat_period,
         }
-        r = self._session.get(url, params=params, timeout=self._timeout)
-        r.raise_for_status()
-        return r.json()
+
+        errors: list[str] = []
+        for path in STAT_ODDS_PATHS:
+            url = f"{BASE_URL}{path.format(match_id=match_id)}"
+            try:
+                response = self._session.get(url, params=params, timeout=self._timeout)
+                response.raise_for_status()
+                return response.json()
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else "unknown"
+                errors.append(f"{path} returned HTTP {status}")
+            except requests.RequestException as exc:
+                errors.append(f"{path} request failed: {exc}")
+
+        tried = ", ".join(path for path in STAT_ODDS_PATHS)
+        errors_joined = "; ".join(errors) if errors else "unexpected error"
+        raise RuntimeError(
+            "Failed to fetch stat odds for match "
+            f"{match_id} stat={stat}. Tried endpoints: {tried}. Errors: {errors_joined}"
+        )
 
 
 def build_client() -> SmartTablesClient:
