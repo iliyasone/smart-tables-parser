@@ -100,7 +100,7 @@ class SmartTablesClient:
         stat: str,
         stat_format: str = "totals",
         stat_period: str = "all",
-    ) -> dict[Any, Any]:
+    ) -> dict[Any, Any] | None:
         """Fetch stat odds, trying both known endpoint variants before giving up."""
 
         params = {
@@ -121,7 +121,7 @@ class SmartTablesClient:
         match_id: int | str,
         *,
         stat: str,
-    ) -> dict[Any, Any]:
+    ) -> dict[Any, Any] | None:
         params = {"stat": stat}
         return self._fetch_match_data(
             match_id=match_id,
@@ -137,30 +137,45 @@ class SmartTablesClient:
         paths: tuple[str, ...],
         params: dict[str, Any] | None = None,
         resource_name: str,
-    ) -> dict[Any, Any]:
+    ) -> dict[Any, Any] | None:
         """Request match data across fallback endpoints."""
 
-        errors: list[str] = []
+        last_exception: RuntimeError | None = None
+        server_error_seen = False
+        client_error_info: tuple[str, int] | None = None
         for path in paths:
-            url = f"{BASE_URL}{path.format(match_id=match_id)}"
+            formatted_path = path.format(match_id=match_id)
+            url = f"{BASE_URL}{formatted_path}"
             try:
                 response = self._session.get(url, params=params, timeout=self._timeout)
-                response.raise_for_status()
-                return response.json()
-            except requests.HTTPError as exc:
-                status = (
-                    exc.response.status_code if exc.response is not None else "unknown"
-                )
-                errors.append(f"{path} returned HTTP {status}")
             except requests.RequestException as exc:
-                errors.append(f"{path} request failed: {exc}")
+                last_exception = RuntimeError(
+                    f"Request failed for {formatted_path}: {exc}"
+                )
+                continue
 
-        tried = ", ".join(path for path in paths)
-        errors_joined = "; ".join(errors) if errors else "unexpected error"
-        raise RuntimeError(
-            f"Failed to fetch {resource_name} for match "
-            f"{match_id}. Tried endpoints: {tried}. Errors: {errors_joined}"
-        )
+            status = response.status_code
+            if 200 <= status < 300:
+                return response.json()
+            if 400 <= status < 500:
+                client_error_info = client_error_info or (formatted_path, status)
+                continue
+            if status >= 500:
+                server_error_seen = True
+                continue
+
+            last_exception = RuntimeError(
+                f"{formatted_path} returned unexpected HTTP {status}"
+            )
+
+        if server_error_seen:
+            return None
+        if client_error_info is not None:
+            path, status = client_error_info
+            raise RuntimeError(f"{path} returned HTTP {status}")
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError(f"Failed to fetch {resource_name} for match {match_id}")
 
 def build_client() -> SmartTablesClient:
     """Return an authenticated SmartTablesClient using env/config secrets."""
