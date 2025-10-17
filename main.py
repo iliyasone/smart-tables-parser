@@ -8,7 +8,7 @@ if __name__ == "__main__":
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable, TypedDict
 
 from smarttables import SmartTablesClient, build_client
 
@@ -26,12 +26,23 @@ STATS: tuple[str, ...] = (
 OUTPUT_ROOT = Path("out")
 
 
+class StatOutcomeSummary(TypedDict):
+    retrieved: list[str]
+    missing: list[str]
+    errors: list[tuple[str, str]]
+
+
+class ExportMatchStatsSummary(TypedDict):
+    stat_odds: StatOutcomeSummary
+    charts: StatOutcomeSummary
+
+
 def export_match_stats(
     client: SmartTablesClient,
     match_id: str | int,
     *,
     stats: Iterable[str] = STATS,
-) -> dict[str, dict[str, list[tuple[str, str] | str]]]:
+) -> ExportMatchStatsSummary:
     """Fetch stats, persist available data, and track per-stat outcomes."""
 
     match_dir = OUTPUT_ROOT / str(match_id)
@@ -41,7 +52,7 @@ def export_match_stats(
     chart_dir = match_dir / "charts"
     chart_dir.mkdir(parents=True, exist_ok=True)
 
-    summary: dict[str, dict[str, list[Any]]] = {
+    summary: ExportMatchStatsSummary = {
         "stat_odds": {"retrieved": [], "missing": [], "errors": []},
         "charts": {"retrieved": [], "missing": [], "errors": []},
     }
